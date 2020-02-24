@@ -803,3 +803,22 @@ def speech_conv_lstm_swbd(args):
     args.attention_type = getattr(args, 'attention_type', 'bahdanau')
     args.attention_dim = getattr(args, 'attention_dim', 640)
     base_architecture(args)
+
+
+#####################
+# NEW ARCHITECTURES #
+#####################
+
+@register_model_architecture('speech_lstm', 'speech_conv_lstm_media')
+def speech_conv_lstm_librispeech(args):
+    args.dropout = getattr(args, 'dropout', 0.3)
+    args.encoder_rnn_hidden_size = getattr(args, 'encoder_rnn_hidden_size', 1024)
+    args.encoder_rnn_layers = getattr(args, 'encoder_rnn_layers', 4)
+    args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 512)
+    args.decoder_hidden_size = getattr(args, 'decoder_hidden_size', 1024)
+    args.decoder_layers = getattr(args, 'decoder_layers', 3)
+    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 3072)
+    args.decoder_rnn_residual = getattr(args, 'decoder_rnn_residual', True)
+    args.attention_type = getattr(args, 'attention_type', 'bahdanau')
+    args.attention_dim = getattr(args, 'attention_dim', 512)
+    base_architecture(args)

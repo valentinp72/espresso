@@ -181,3 +181,18 @@ def lstm_wordlm_wsj(args):
     args.share_embed = getattr(args, 'share_embed', True)
     args.is_wordlm = True
     base_lm_architecture(args)
+
+
+#####################
+# NEW ARCHITECTURES #
+#####################
+
+@register_model_architecture('lstm_lm_espresso', 'lstm_lm_media')
+def lstm_lm_librispeech(args):
+    args.dropout = getattr(args, 'dropout', 0.0)
+    args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 800)
+    args.decoder_hidden_size = getattr(args, 'decoder_hidden_size', 800)
+    args.decoder_layers = getattr(args, 'decoder_layers', 2)
+    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 800)
+    args.share_embed = getattr(args, 'share_embed', True)
+    base_lm_architecture(args)

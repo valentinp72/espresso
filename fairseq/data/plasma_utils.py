@@ -79,7 +79,7 @@ class PlasmaArray(object):
         self.array = self.client.get(self.object_id)
 
     def __del__(self):
-        if self._server is not None:
+        if hasattr(self, '_server') and self._server is not None:
             self._server.kill()
             self._server = None
             self._server_tmp.close()
