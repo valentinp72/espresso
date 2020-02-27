@@ -57,7 +57,7 @@ class LSTMModel(FairseqEncoderDecoderModel):
                             help='decoder output embedding dimension')
         parser.add_argument('--decoder-attention', type=str, metavar='BOOL',
                             help='decoder attention')
-        parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
+        parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR', nargs='*',
                             help='comma separated list of adaptive softmax cutoff points. '
                                  'Must be used with adaptive_loss criterion')
         parser.add_argument('--share-decoder-input-output-embed', default=False,

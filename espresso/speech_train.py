@@ -24,7 +24,6 @@ from fairseq.data import iterators
 from fairseq.trainer import Trainer
 from fairseq.meters import StopwatchMeter
 
-
 logging.basicConfig(
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
@@ -90,6 +89,7 @@ def main(args, init_distributed=False):
     train_meter = StopwatchMeter()
     train_meter.start()
     valid_subsets = args.valid_subset.split(',')
+ 
     while (
         lr > args.min_lr
         and (
@@ -124,6 +124,9 @@ def main(args, init_distributed=False):
             # sharded data: get train iterator for next epoch
             load_dataset=(os.pathsep in getattr(args, 'data', '')),
         )
+
+    validate(args, trainer, task, epoch_itr, valid_subsets, last_one=True)
+
     train_meter.stop()
     logger.info('done training in {:.1f} seconds'.format(train_meter.sum))
 
@@ -210,7 +213,7 @@ def get_training_stats(stats):
     return stats
 
 
-def validate(args, trainer, task, epoch_itr, subsets):
+def validate(args, trainer, task, epoch_itr, subsets, last_one=False):
     """Evaluate the model on the validation set(s) and return the losses."""
 
     if args.fixed_validation_seed is not None:
@@ -250,6 +253,9 @@ def validate(args, trainer, task, epoch_itr, subsets):
         # log validation stats
         stats = get_valid_stats(args, trainer, agg.get_smoothed_values())
         progress.print(stats, tag=subset, step=trainer.get_num_updates())
+
+        if last_one:
+            progress.print_end_training(stats, metric_name='best_wer', tag=subset)
 
         valid_losses.append(stats[args.best_checkpoint_metric])
     return valid_losses

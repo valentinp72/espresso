@@ -34,7 +34,7 @@ class LSTMLanguageModelEspresso(FairseqLanguageModel):
                             help='decoder embedding dimension')
         parser.add_argument('--decoder-embed-path', type=str, metavar='STR',
                             help='path to pre-trained decoder embedding')
-        parser.add_argument('--decoder-freeze-embed', action='store_true',
+        parser.add_argument('--decoder-freeze-embed', type=lambda x: options.eval_bool(x),
                             help='freeze decoder embeddings')
         parser.add_argument('--decoder-hidden-size', type=int, metavar='N',
                             help='decoder hidden size')
@@ -42,13 +42,13 @@ class LSTMLanguageModelEspresso(FairseqLanguageModel):
                             help='number of decoder layers')
         parser.add_argument('--decoder-out-embed-dim', type=int, metavar='N',
                             help='decoder output embedding dimension')
-        parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
+        parser.add_argument('--adaptive-softmax-cutoff', nargs='*', metavar='EXPR',
                             help='comma separated list of adaptive softmax cutoff points. '
                                  'Must be used with adaptive_loss criterion')
         parser.add_argument('--share-embed',
                             type=lambda x: options.eval_bool(x),
                             help='share input and output embeddings')
-        parser.add_argument('--is-wordlm', action='store_true',
+        parser.add_argument('--is-wordlm', type=lambda x: options.eval_bool(x),
                             help='whether it is word LM or subword LM. Only '
                             'relevant for ASR decoding with LM, and it determines '
                             'how the underlying decoder instance gets the dictionary'

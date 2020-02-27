@@ -100,6 +100,10 @@ class progress_bar(object):
         """Print end-of-epoch stats."""
         raise NotImplementedError
 
+    def print_end_training(self, stats, metric_name, tag=None):
+        """Print end-of-training stats."""
+        pass
+
     def _str_commas(self, stats):
         return ', '.join(key + '=' + stats[key].strip()
                          for key in stats.keys())
@@ -273,6 +277,32 @@ class tensorboard_log_wrapper(progress_bar):
             )
             self.SummaryWriter = None
 
+    def get_hyperparameters(self):
+        hyperparams = {}
+        registered = vars(self.args)
+        allowed_params = [
+            'attention_dim', 'attention_type', 'need_attention',
+            'decoder_dropout_in', 'decoder_dropout_out', 'decoder_embed_dim',
+            'decoder_freeze_embed', 'decoder_hidden_size', 'decoder_layers',
+            'share_decoder_input_output_embed', 'decoder_out_embed_dim',
+            'decoder_rnn_residual',
+            'encoder_rnn_bidirectional', 'encoder_rnn_dropout_in',
+            'encoder_rnn_dropout_out', 'encoder_rnn_hidden_size',
+            'encoder_rnn_layers', 'encoder_rnn_residual',
+            'final_lr_scale', 'lr', 'lr_scheduler', 'start_reduce_lr_epoch',
+            'lr_shrink', 'lr_threshold', 'patience', 'max_epoch',
+            'dropout', 'optimizer', 'weight_decay', 'clip_norm',
+            'max_sentences', 'max_sentences_valid', 'max_source_positions',
+            'max_target_positions', 'max_tokens', 'max_tokens_valid',
+            'min_loss_scale'
+        ]
+
+        for param in allowed_params:
+            if param in registered:
+                hyperparams[param] = registered[param]
+
+        return hyperparams
+
     def _writer(self, key):
         if self.SummaryWriter is None:
             return None
@@ -297,7 +327,13 @@ class tensorboard_log_wrapper(progress_bar):
         self._log_to_tensorboard(stats, tag, step)
         self.wrapped_bar.print(stats, tag=tag, step=step)
 
+    def print_end_training(self, stats, metric_name, tag=None):
+        """Print end-of-training stats."""
+        assert metric_name in stats, "Metric named {} should be in given stats ({})".format(metric_name, stats.keys())
+        self._log_to_hparams_tensorboard(stats, metric_name, tag)
+
     def __exit__(self, *exc):
+        print("\n\n\nClosing all writers\n\n\n")
         for writer in getattr(self, '_writers', {}).values():
             writer.close()
         return False
@@ -313,3 +349,14 @@ class tensorboard_log_wrapper(progress_bar):
                 writer.add_scalar(key, stats[key].val, step)
             elif isinstance(stats[key], Number):
                 writer.add_scalar(key, stats[key], step)
+
+    def _log_to_hparams_tensorboard(self, stats, metric_name, tag=None):
+        writer = self._writer(tag or '')
+        if writer is None:
+            return
+        params = self.get_hyperparameters()
+        if isinstance(stats[metric_name], AverageMeter):
+            writer.add_hparams(params, {metric_name: stats[metric_name].val})
+        elif isinstance(stats[metric_name], Number):
+            writer.add_hparams(params, {metric_name: stats[metric_name]})
+

@@ -34,7 +34,6 @@ import espresso.tools.utils as speech_utils
 DEFAULT_MAX_SOURCE_POSITIONS = 1e5
 DEFAULT_MAX_TARGET_POSITIONS = 1e5
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -74,7 +73,7 @@ class SpeechLSTMModel(FairseqEncoderDecoderModel):
                             help='decoder embedding dimension')
         parser.add_argument('--decoder-embed-path', type=str, metavar='STR',
                             help='path to pre-trained decoder embedding')
-        parser.add_argument('--decoder-freeze-embed', action='store_true',
+        parser.add_argument('--decoder-freeze-embed', type=lambda x: options.eval_bool(x),
                             help='freeze decoder embeddings')
         parser.add_argument('--decoder-hidden-size', type=int, metavar='N',
                             help='decoder hidden size')
@@ -92,7 +91,7 @@ class SpeechLSTMModel(FairseqEncoderDecoderModel):
                             help='attention type')
         parser.add_argument('--attention-dim', type=int, metavar='N',
                             help='attention dimension')
-        parser.add_argument('--need-attention', action='store_true',
+        parser.add_argument('--need-attention', type=lambda x: options.eval_bool(x),
                             help='need to return attention tensor for the caller')
         parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
                             help='comma separated list of adaptive softmax cutoff points. '
@@ -811,14 +810,15 @@ def speech_conv_lstm_swbd(args):
 
 @register_model_architecture('speech_lstm', 'speech_conv_lstm_media')
 def speech_conv_lstm_librispeech(args):
-    args.dropout = getattr(args, 'dropout', 0.3)
-    args.encoder_rnn_hidden_size = getattr(args, 'encoder_rnn_hidden_size', 1024)
-    args.encoder_rnn_layers = getattr(args, 'encoder_rnn_layers', 4)
+    args.dropout = getattr(args, 'dropout', 0.2)
+    args.encoder_rnn_hidden_size = getattr(args, 'encoder_rnn_hidden_size', 512)
+    args.encoder_rnn_layers = getattr(args, 'encoder_rnn_layers', 2)
     args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 512)
-    args.decoder_hidden_size = getattr(args, 'decoder_hidden_size', 1024)
-    args.decoder_layers = getattr(args, 'decoder_layers', 3)
-    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 3072)
+    args.decoder_hidden_size = getattr(args, 'decoder_hidden_size', 512)
+    args.decoder_layers = getattr(args, 'decoder_layers', 2)
+    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 1024)
     args.decoder_rnn_residual = getattr(args, 'decoder_rnn_residual', True)
     args.attention_type = getattr(args, 'attention_type', 'bahdanau')
-    args.attention_dim = getattr(args, 'attention_dim', 512)
+    args.attention_dim = getattr(args, 'attention_dim', 128)
+    args.need_attention = getattr(args, 'need_attention', True)
     base_architecture(args)
