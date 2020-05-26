@@ -9,3 +9,4 @@ import espresso.modules  # noqa
 import espresso.optim  # noqa
 import espresso.optim.lr_scheduler  # noqa
 import espresso.tasks  # noqa
+import espresso.tuning # noqa
