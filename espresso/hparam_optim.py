@@ -124,13 +124,17 @@ timestamp = str(time.time())
 exp_key = "exp-tuning-{}".format(timestamp)
 
 for i in range(args.num_workers):
-    subprocess.Popen([
-        'hyperopt-mongo-worker',
-        '--mongo={}'.format(args.mongo_db),
-        '--max-consecutive-failures=1',
-        '--exp-key={}'.format(exp_key),
-        '--workdir=.'
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    with open('log-hparams.txt', 'w') as out:
+        subprocess.Popen([
+            'hyperopt-mongo-worker',
+            '--mongo={}'.format(args.mongo_db),
+            '--max-consecutive-failures=100',
+            '--exp-key={}'.format(exp_key),
+            '--workdir=.'
+        ]
+        , stdout=out, stderr=subprocess.STDOUT
+        #, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
 
 ##
 
@@ -172,7 +176,8 @@ def write_conf_file(params_dict, f):
         print("{}={}".format(key, value), file=f)
 
 with open(args.best_parameters_file, 'w') as f:
-    write_conf_file(best, f)
+    par = space_eval(space, best)
+    write_conf_file(par, f)
 
 
 ##

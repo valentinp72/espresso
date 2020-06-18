@@ -438,8 +438,8 @@ class SpeechLSTMDecoder(FairseqIncrementalDecoder):
         self.residual = residual
         self.max_target_positions = max_target_positions
 
-        ex = [dictionary[i] for i in range(0,10)]
-        logger.info('Dictionary size: {} | examples: {}'.format(len(dictionary), ex)) # dictionary[:10]))
+        #ex = [dictionary[i] for i in range(0,10)]
+        #logger.info('Dictionary size: {} | examples: {}'.format(len(dictionary), ex)) # dictionary[:10]))
 
         self.adaptive_softmax = None
         num_embeddings = len(dictionary)
