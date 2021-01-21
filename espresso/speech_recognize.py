@@ -7,7 +7,7 @@
 """
 Recognize pre-processed speech with a trained model.
 """
-
+import ipdb
 import logging
 import math
 import os
@@ -136,6 +136,8 @@ def _main(args, output_file):
 
     # Generate and compute WER
     scorer = wer.Scorer(dictionary, wer_output_filter=args.wer_output_filter)
+    nbest_scorers = [wer.Scorer(dictionary, wer_output_filter=args.wer_output_filter) for i in range(args.nbest)]
+
     num_sentences = 0
     has_target = True
     with progress_bar.build_progress_bar(args, itr) as t:
@@ -198,6 +200,12 @@ def _main(args, output_file):
                         scorer.add_prediction(utt_id, hypo_str, bpe_symbol=args.remove_bpe)
                         if has_target:
                             scorer.add_evaluation(utt_id, target_str, hypo_str, bpe_symbol=args.remove_bpe)
+
+                    nbest_scorers[j].add_prediction(utt_id, hypo_str, bpe_symbol=args.remove_bpe)
+                    if has_target:
+                        nbest_scorers[j].add_evaluation(utt_id, target_str, hypo_str, bpe_symbol=args.remove_bpe)
+
+                ipdb.set_trace()
 
             wps_meter.update(num_generated_tokens)
             t.log({'wps': round(wps_meter.avg)})

@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -51,6 +50,14 @@ class SpeechLSTMModel(FairseqEncoderDecoderModel):
         # fmt: off
         parser.add_argument('--dropout', type=float, metavar='D',
                             help='dropout probability')
+        parser.add_argument('--encoder-conv-2d',
+                            type=lambda x: options.eval_bool(x),
+                            help='should the encoder convolutions be 2d? if '
+                            'False, convolutions and batchnorm will be 1d'
+                            )
+        parser.add_argument('--encoder-conv-1d-dim', type=int, default=2,
+                            help='on which dimension should the 1d convolutions'
+                            'be done. only used when --encoder-conv-2d is False')
         parser.add_argument('--encoder-conv-channels', type=str, metavar='EXPR',
                             help='list of encoder convolution\'s out channels')
         parser.add_argument('--encoder-conv-kernel-sizes', type=str, metavar='EXPR',
@@ -163,6 +170,8 @@ class SpeechLSTMModel(FairseqEncoderDecoderModel):
         def eval_str_nested_list_or_tuple(x, type=int):
             if x is None:
                 return None
+            if x == "None":
+                return None
             if isinstance(x, str):
                 x = eval(x)
             if isinstance(x, list):
@@ -182,8 +191,14 @@ class SpeechLSTMModel(FairseqEncoderDecoderModel):
         strides = eval_str_nested_list_or_tuple(args.encoder_conv_strides, type=int)
         logger.info('input feature dimension: {}, channels: {}'.format(task.feat_dim, task.feat_in_channels))
         assert task.feat_dim % task.feat_in_channels == 0
+
+        # retrocompatibilty with previous models which didn't had these options
+        conv_2d = args.encoder_conv_2d if "encoder_conv_2d" in args else True
+        conv_1d_dim = args.encoder_conv_1d_dim if "encoder_conv_1d_dim" in args else 0
+
         conv_layers = ConvBNReLU(
             out_channels, kernel_sizes, strides, in_channels=task.feat_in_channels,
+            conv2d=conv_2d, conv1dDim=conv_1d_dim
         ) if out_channels is not None else None
 
         rnn_encoder_input_size = task.feat_dim // task.feat_in_channels
@@ -262,7 +277,7 @@ class SpeechLSTMModel(FairseqEncoderDecoderModel):
 
 class ConvBNReLU(nn.Module):
     """Sequence of convolution-BatchNorm-ReLU layers."""
-    def __init__(self, out_channels, kernel_sizes, strides, in_channels=1):
+    def __init__(self, out_channels, kernel_sizes, strides, in_channels=1, conv2d=True, conv1dDim=None):
         super().__init__()
         self.out_channels = out_channels
         self.kernel_sizes = kernel_sizes
@@ -274,13 +289,29 @@ class ConvBNReLU(nn.Module):
 
         self.convolutions = nn.ModuleList()
         self.batchnorms = nn.ModuleList()
+        # for i in range(num_layers):
+        #     self.convolutions.append(
+        #         Convolution2d(
+        #             self.in_channels if i == 0 else self.out_channels[i-1],
+        #             self.out_channels[i],
+        #             self.kernel_sizes[i], self.strides[i]))
+        #     self.batchnorms.append(nn.BatchNorm2d(out_channels[i]))
         for i in range(num_layers):
-            self.convolutions.append(
-                Convolution2d(
-                    self.in_channels if i == 0 else self.out_channels[i-1],
-                    self.out_channels[i],
-                    self.kernel_sizes[i], self.strides[i]))
-            self.batchnorms.append(nn.BatchNorm2d(out_channels[i]))
+            if conv2d:
+                self.convolutions.append(
+                    Convolution2d(
+                        self.in_channels if i == 0 else self.out_channels[i-1],
+                        self.out_channels[i],
+                        self.kernel_sizes[i], self.strides[i]))
+                self.batchnorms.append(nn.BatchNorm2d(out_channels[i]))
+            else:
+                self.convolutions.append(
+                    Convolution1d(
+                        self.in_channels if i == 0 else self.out_channels[i-1],
+                        self.out_channels[i],
+                        self.kernel_sizes[i], self.strides[i],
+                        dim=conv1dDim))
+                self.batchnorms.append(BatchNorm1d_as_2d(out_channels[i], dim=conv1dDim))
 
     def output_lengths(self, in_lengths):
         out_lengths = in_lengths
@@ -735,6 +766,89 @@ def Convolution2d(in_channels, out_channels, kernel_size, stride):
         in_channels, out_channels, kernel_size, stride=stride, padding=padding,
     )
     return m
+
+def Convolution1d(in_channels, out_channels, kernel_size, stride, dim):
+    if isinstance(kernel_size, (list, tuple)):
+        if len(kernel_size) != 2:
+            assert len(kernel_size) == 1
+        else:
+            assert kernel_size[0] == kernel_size[1], "2d kernel size not supported with 1d conv"
+            kernel_size = kernel_size[0]
+    else:
+        assert isinstance(kernel_size, int)
+
+    if isinstance(stride, (list, tuple)):
+        if len(stride) != 2:
+            assert len(stride) == 1
+        else:
+            assert stride[0] == stride[1], "2d stride not supported with 1d conv"
+            stride = stride[0]
+    else:
+        assert isinstance(stride, int)
+
+    assert kernel_size % 2 == 1
+    padding = (kernel_size - 1) // 2
+    m = Conv1d_as_2d(
+        in_channels, out_channels, kernel_size, stride=stride, padding=padding,
+        dim=dim
+    )
+    return m
+
+def _make_slice(n_dims, dim, index):
+    # make a slice that can be used on a torch.tensor to keep elements from an index corresponding to a dim
+    # the following are strictly identical:
+    # tensor[:, :, 0, :] == tensor[_make_slice(4, 2, 0)]
+    # tensor[:, :, 1, :] == tensor[_make_slice(4, 2, 1)]
+    # tensor[:, :, :, 0] == tensor[_make_slice(4, 3, 0)]
+    # tensor[:, :, :, 9] == tensor[_make_slice(4, 3, 9)]
+    s = [slice(None)] * n_dims
+    s[dim] = index
+    return tuple(s)
+
+class Conv1d_as_2d(nn.Conv1d):
+
+    def __init__(
+            self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True, padding_mode='zeros',
+            dim=0
+        ):
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        self.dim = dim
+
+    def forward(self, input):
+        out = []
+        for i in range(input.shape[self.dim]):
+            out.append(super().forward(input[_make_slice(input.ndim, self.dim, i)]))
+        out = torch.stack(out)
+
+        # reorder so that self.dim is still at self.dim and not dim 0
+        axes = list(range(out.ndim))
+        del axes[0]
+        axes.insert(self.dim, 0)
+        out = out.permute(*axes)
+
+        return out
+
+class BatchNorm1d_as_2d(nn.BatchNorm1d):
+
+    def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True,
+                 dim=0
+        ):
+        super().__init__(num_features, eps, momentum, affine, track_running_stats)
+        self.dim = dim
+
+    def forward(self, input):
+        out = []
+        for i in range(input.shape[self.dim]):
+            out.append(super().forward(input[_make_slice(input.ndim, self.dim, i)]))
+        out = torch.stack(out)
+
+        # reorder so that self.dim is still at self.dim and not dim 0
+        axes = list(range(out.ndim))
+        del axes[0]
+        axes.insert(self.dim, 0)
+        out = out.permute(*axes)
+
+        return out
 
 
 @register_model_architecture('speech_lstm', 'speech_lstm')

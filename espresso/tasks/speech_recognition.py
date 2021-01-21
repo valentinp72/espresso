@@ -20,6 +20,7 @@ from espresso.data import (
     AsrDictionary,
     AsrTextDataset,
     ScpCachedDataset,
+    ScpInMemoryDataset,
     SpeechDataset,
 )
 
@@ -71,9 +72,16 @@ def get_asr_dataset_from_json(
                 utt2num_frames.append(int(val["utt2num_frames"]))
 
         assert len(utt2num_frames) == 0 or len(utt_ids) == len(utt2num_frames)
+        # src_datasets.append(ScpCachedDataset(
+        #     utt_ids, feats, utt2num_frames=utt2num_frames, ordered_prefetch=True
+        # ))
+
         src_datasets.append(ScpCachedDataset(
-            utt_ids, feats, utt2num_frames=utt2num_frames, ordered_prefetch=True
+            utt_ids, feats, ordered_prefetch=True
         ))
+        # src_datasets.append(ScpInMemoryDataset(
+        #     utt_ids, feats #, utt2num_frames=utt2num_frames
+        # ))
         if len(token_text) > 0:
             assert len(utt_ids) == len(token_text)
             assert tgt_dict is not None
@@ -198,6 +206,8 @@ class SpeechRecognitionEspressoTask(FairseqTask):
         dict_path = os.path.join(args.data, "dict.txt") if args.dict is None else args.dict
         tgt_dict = cls.load_dictionary(dict_path, non_lang_syms=args.non_lang_syms)
         logger.info("dictionary: {} types".format(len(tgt_dict)))
+        logger.info("dictionary: {}".format(tgt_dict.symbols))
+        logger.info("output sample of length 10: {}".format(tgt_dict.dummy_sentence(10)))
         if args.word_dict is not None:
             word_dict = cls.load_dictionary(args.word_dict)
             logger.info("word dictionary: {} types".format(len(word_dict)))

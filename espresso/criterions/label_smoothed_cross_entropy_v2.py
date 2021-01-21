@@ -94,6 +94,16 @@ class LabelSmoothedCrossEntropyV2Criterion(LabelSmoothedCrossEntropyCriterion):
             self.unigram_tensor += args.unigram_pseudo_count  # for further backoff
             self.unigram_tensor.div_(self.unigram_tensor.sum())
 
+        if args.classes_weights is None:
+            self.weight = torch.zeros((len(self.dictionary)))
+        else:
+            with open(args.classes_weights, 'r') as f:
+                data = map(lambda x: int(x.split(' ')[1]), f.read().splitlines())
+                self.weight = torch.tensor([0] * self.dictionary.nspecial + list(data))
+        print(self.dictionary)
+        assert self.weight.shape[0] == len(self.dictionary), f"{self.weight.shape[0]} != {len(self.dictionary)}"
+        logger.info(f'Weights of output classes sum to {sum(self.weight).item()}')
+
     @staticmethod
     def add_args(parser):
         """Add criterion-specific arguments to the parser."""
@@ -109,6 +119,11 @@ class LabelSmoothedCrossEntropyV2Criterion(LabelSmoothedCrossEntropyCriterion):
         parser.add_argument('--unigram-pseudo-count', type=float, default=1.0,
                             metavar='C', help='pseudo count for unigram label '
                             'smoothing. Only relevant if --smoothing-type=unigram')
+        parser.add_argument('--classes-weights', type=str, default=None,
+                            help='a file path of weights for each output token.'
+                            ' One token per line, followed by a weight. If'
+                            ' None, then no weights are applied. PLEASE ALIGN'
+                            ' THIS DICT WITH the one given in --dict')
         # fmt: on
 
     def forward(self, model, sample, reduce=True):
@@ -160,6 +175,7 @@ class LabelSmoothedCrossEntropyV2Criterion(LabelSmoothedCrossEntropyCriterion):
         self, model, net_output, sample, reduce=True, smoothing_type='uniform'
     ):
         lprobs = model.get_normalized_probs(net_output, log_probs=True)
+        lprobs = lprobs.add(self.weight.to(lprobs.device))
         target = model.get_targets(sample, net_output)
         prob_mask = temporal_label_smoothing_prob_mask(
             lprobs, target, padding_index=self.padding_idx,

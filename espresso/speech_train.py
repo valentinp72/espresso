@@ -7,7 +7,7 @@
 """
 Train a new model on one or across multiple GPUs.
 """
-
+# import ipdb
 import logging
 import math
 import os
@@ -16,6 +16,8 @@ import sys
 
 import numpy as np
 import torch
+import torchsummary
+import traceback
 
 from fairseq import (
     checkpoint_utils, distributed_utils, metrics, options, progress_bar, tasks, utils
@@ -31,7 +33,6 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger('espresso.speech_train')
-
 
 def main(args, init_distributed=False):
     utils.import_user_module(args)
@@ -64,6 +65,7 @@ def main(args, init_distributed=False):
     model = task.build_model(args)
     criterion = task.build_criterion(args)
     logger.info(model)
+
     logger.info('model {}, criterion {}'.format(args.arch, criterion.__class__.__name__))
     logger.info('num. model params: {} (num. trained: {})'.format(
         sum(p.numel() for p in model.parameters()),
@@ -82,6 +84,20 @@ def main(args, init_distributed=False):
     # corresponding train iterator
     extra_state, epoch_itr = checkpoint_utils.load_checkpoint(args, trainer)
 
+    try:
+        iterator = epoch_itr._get_iterator_for_epoch(1, False)
+        net_input = iterator.__next__()["net_input"]
+        model_summary = torchsummary.summary(trainer._model,
+                              verbose=0,
+                              col_names=["input_size", "output_size", "num_params"],
+                              input_data=net_input["src_tokens"].to(trainer.device),
+                              src_lengths=net_input["src_lengths"].to(trainer.device),
+                              prev_output_tokens=net_input["prev_output_tokens"].to(trainer.device))
+        logger.info("Model summary:\n" + str(model_summary))
+    except:
+        logger.info(f"Tried to print model summary. Got an error.\n{traceback.format_exc()}")
+
+
     # Train until the learning rate gets too small
     max_epoch = args.max_epoch or math.inf
     max_update = args.max_update or math.inf
@@ -89,7 +105,7 @@ def main(args, init_distributed=False):
     train_meter = StopwatchMeter()
     train_meter.start()
     valid_subsets = args.valid_subset.split(',')
- 
+
     while (
         lr > args.min_lr
         and (
@@ -176,7 +192,6 @@ def train(args, trainer, task, epoch_itr):
     for samples in progress:
         if hasattr(trainer.criterion, 'set_num_updates'):
             trainer.criterion.set_num_updates(trainer.get_num_updates())
-
         log_output = trainer.train_step(samples)
         num_updates = trainer.get_num_updates()
         if log_output is None:

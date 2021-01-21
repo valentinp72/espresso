@@ -6,7 +6,6 @@
 """
 Wrapper around various loggers and progress bars (e.g., tqdm).
 """
-
 from collections import OrderedDict
 from contextlib import contextmanager
 import json
@@ -344,11 +343,12 @@ class tensorboard_log_wrapper(progress_bar):
             return
         if step is None:
             step = stats['num_updates']
+        epoch = self.wrapped_bar.epoch
         for key in stats.keys() - {'num_updates'}:
             if isinstance(stats[key], AverageMeter):
-                writer.add_scalar(key, stats[key].val, step)
+                writer.add_scalar(key, stats[key].val, epoch)
             elif isinstance(stats[key], Number):
-                writer.add_scalar(key, stats[key], step)
+                writer.add_scalar(key, stats[key], epoch)
 
     def _log_to_hparams_tensorboard(self, stats, metric_name, tag=None):
         writer = self._writer(tag or '')
